@@ -15,9 +15,9 @@
 
 [![Python](https://img.shields.io/badge/python-3.10+-3776AB.svg?logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-22c55e.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue.svg)]()
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-8b5cf6.svg)](https://modelcontextprotocol.io)
 [![Token Savings](https://img.shields.io/badge/token%20savings-up%20to%2090%25-f97316.svg)]()
-[![Works With Any AI](https://img.shields.io/badge/works%20with-any%20AI-06b6d4.svg)]()
 
 </div>
 
@@ -25,99 +25,139 @@
 
 ## The Problem
 
-When AI agents browse the web, they waste thousands of tokens on HTML boilerplate, navigation menus, ads, and irrelevant content. A single page fetch can consume 10,000+ tokens — most of it noise.
+When AI agents browse the web, they waste thousands of tokens on HTML boilerplate, navigation menus, ads, and irrelevant content. A single page fetch can consume 10,000+ tokens — most of it noise. JS-heavy sites like Yahoo Finance simply return nothing.
 
 ```
-Without mini-browser:   raw HTML → 12,000 tokens → $$$
-With mini-browser:      clean text →   800 tokens → $
+Without mini-browser:   raw HTML → 12,000 tokens  →  $$$
+With mini-browser:      clean text →   800 tokens  →  $
 ```
 
 ## The Solution
 
-**mini-browser** is a lightweight Python tool that sits between your AI agent and the web. It:
+**mini-browser** sits between your AI agent and the web:
 
-1. **Searches** — queries DuckDuckGo (no API key required)
-2. **Fetches** — retrieves the actual page content
-3. **Extracts** — strips all HTML noise, keeps only the main content
-4. **Compresses** — filters chunks by relevance to your query
-5. **Returns** — clean, dense, relevant text within your token budget
+1. **Searches** — DuckDuckGo, no API key required, spam filtered, recency-aware
+2. **Fetches** — full Playwright browser for JS-heavy sites (Yahoo Finance, TradingView, Bloomberg), fast httpx for simple sites
+3. **Extracts** — trafilatura + BeautifulSoup strip all noise (nav/ads/footer)
+4. **Compresses** — sentence-level relevance scoring keeps only what matters for your query
+5. **Returns** — clean text within your token budget, cached for 30 minutes
 
-Works with **any AI** — from GPT and Claude to local models and text-only systems.
+Works with **any AI** — Claude Code, Codex CLI, Gemini CLI, OpenCode, or any model that can call Python or run shell commands.
 
 ---
 
-## Features
+## Quick Start
 
-- **Zero API keys required** — uses DuckDuckGo for search
-- **Up to 90% token reduction** compared to raw HTML fetching
-- **Relevance-aware compression** — keeps content most relevant to your query
-- **Token budget control** — set exact output token limits
-- **Three interfaces** — Python API, CLI, and MCP server
-- **Universal AI compatibility** — works with any model that can call Python or run shell commands
-- **No hallucination risk** — returns real web content, not generated text
+```bash
+# Install
+pip install git+https://github.com/ghanibot/mini-browser.git
+
+# Install Playwright browser (one-time, ~150MB)
+python -m playwright install chromium
+
+# Configure your AI agents (auto-detects Claude Code, Codex, Gemini, OpenCode...)
+mini-browser setup-agents
+
+# Test it
+mini-browser search "latest AI news today"
+```
+
+---
+
+## Supported AI Agents
+
+| Agent | Method | Setup |
+|-------|--------|-------|
+| **Claude Code** | MCP server | `mini-browser setup-agents` |
+| **OpenAI Codex CLI** | MCP server | `mini-browser setup-agents` |
+| **Google Gemini CLI** | MCP server | `mini-browser setup-agents` |
+| **OpenCode** | MCP server | `mini-browser setup-agents` |
+| **Cursor** | MCP server | `mini-browser setup-agents` |
+| **Continue.dev** | MCP server | `mini-browser setup-agents` |
+| **Aider** | CLI shell | `mini-browser search "query"` |
+| **Any OpenAI agent** | Tool calling | `from mini_browser.tools import TOOLS_OPENAI` |
+| **Any Anthropic agent** | Tool calling | `from mini_browser.tools import TOOLS_ANTHROPIC` |
+| **Any HTTP agent** | REST API | `mini-browser serve` |
 
 ---
 
 ## Installation
 
+### Standard (recommended)
 ```bash
-pip install mini-browser
+pip install git+https://github.com/ghanibot/mini-browser.git
+python -m playwright install chromium
 ```
 
-With MCP support (for Claude Desktop, Cursor, etc.):
-
+### With MCP support
 ```bash
-pip install mini-browser[mcp]
+pip install "mini-browser[mcp] @ git+https://github.com/ghanibot/mini-browser.git"
 ```
+
+### With PDF support
+```bash
+pip install "mini-browser[pdf] @ git+https://github.com/ghanibot/mini-browser.git"
+```
+
+### Full (all features)
+```bash
+pip install "mini-browser[full] @ git+https://github.com/ghanibot/mini-browser.git"
+python -m playwright install chromium
+```
+
+**Requirements:** Python 3.10+, internet connection, no API keys needed.
 
 ---
 
 ## Usage
 
-### Python API
+### CLI (works with any AI that can run shell commands)
 
-The simplest interface — one function call:
+```bash
+# Search
+mini-browser search "harga saham Tesla terbaru"
+mini-browser search "latest AI news" --max-results 5 --max-tokens 2000
+
+# Fetch a specific URL (supports JS sites, PDFs)
+mini-browser fetch https://finance.yahoo.com/quote/TSLA/
+mini-browser fetch https://arxiv.org/pdf/2401.00001 --query "transformer attention"
+
+# Deep multi-source research
+mini-browser search "US Iran war 2026 latest" --max-results 5
+
+# With token stats
+mini-browser search "bitcoin price today" --stats
+```
+
+### Python API
 
 ```python
 from mini_browser import search, fetch
 
-# Search the web
-result = search("latest AI agent frameworks 2025", max_results=3, max_tokens=800)
+# Web search — returns clean text, token-efficient
+result = search("harga dolar rupiah hari ini", max_results=3, max_tokens=1500)
 print(result)
 
-# Fetch a specific URL
-result = fetch("https://docs.python.org/3/", query="async generators", max_tokens=500)
+# Fetch specific URL (Yahoo Finance, TradingView, PDFs — all work)
+result = fetch("https://finance.yahoo.com/quote/TSLA/", query="stock price")
 print(result)
+
+# JSON output for programmatic use
+import json
+result = search("AI news", output_format="json")
+data = json.loads(result)
+# [{"title": "...", "url": "...", "content": "...", "tokens": 423}, ...]
 ```
 
-### CLI
+### MCP Server (Claude Code, Codex, Gemini, OpenCode, Cursor)
 
-Perfect for AI agents that can execute shell commands:
-
+**Auto-setup (recommended):**
 ```bash
-# Search
-mini-browser search "OpenAI GPT-5 release date"
-
-# Search with options
-mini-browser search "rust vs go performance 2025" --max-results 5 --max-tokens 1200 --stats
-
-# Fetch a URL
-mini-browser fetch https://arxiv.org/abs/2401.00001 --query "transformer attention"
-
-# Fetch with token stats
-mini-browser fetch https://example.com --max-tokens 500 --stats
+mini-browser setup-agents
+# Restart your AI agent — tools are now available
 ```
 
-### MCP Server
-
-For Claude Desktop, Cursor, and any MCP-compatible host:
-
-```bash
-mini-browser mcp
-```
-
-Add to your MCP config (`claude_desktop_config.json`):
-
+**Manual setup** — add to your agent's MCP config:
 ```json
 {
   "mcpServers": {
@@ -129,158 +169,161 @@ Add to your MCP config (`claude_desktop_config.json`):
 }
 ```
 
-Claude will then have access to `web_search` and `web_fetch` tools automatically.
+Config file locations:
+- Claude Code: `~/.claude/claude_desktop_config.json`
+- Codex CLI: `~/.codex/config.json`
+- Gemini CLI: `~/.gemini/settings.json`
+- OpenCode: `~/.config/opencode/config.json`
+- Cursor: `~/.cursor/mcp.json`
+
+Ready-to-use configs also available in the [`configs/`](configs/) directory.
+
+Once configured, your AI agent gets 3 tools:
+- **`web_search`** — search the web for real-time info
+- **`web_fetch`** — read any URL (JS sites, PDFs)
+- **`deep_research`** — multi-source deep research
+
+### HTTP API (for any language / bima-agent / Node.js)
+
+```bash
+# Start server
+mini-browser serve
+# → running at http://127.0.0.1:7842
+# → docs at http://127.0.0.1:7842/docs
+```
+
+```bash
+# Use from any language
+curl "http://127.0.0.1:7842/search?q=bitcoin+price+today&max_tokens=800"
+curl -X POST http://127.0.0.1:7842/fetch \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://finance.yahoo.com/quote/TSLA/", "query": "stock price"}'
+```
+
+### OpenAI / Anthropic Tool Calling
+
+```python
+from mini_browser.tools import TOOLS_OPENAI, TOOLS_ANTHROPIC, handle_tool_call
+
+# OpenAI / Codex / Gemini
+response = openai_client.chat.completions.create(
+    model="gpt-4o",
+    tools=TOOLS_OPENAI,
+    messages=messages,
+)
+
+# Anthropic / Claude
+response = anthropic_client.messages.create(
+    model="claude-opus-4-7",
+    tools=TOOLS_ANTHROPIC,
+    messages=messages,
+)
+
+# Execute tool call (works for any provider)
+result = handle_tool_call(tool_name, tool_arguments)
+```
 
 ---
 
-## Token Savings Example
+## Features
 
-Fetching a news article about AI:
+| Feature | Details |
+|---------|---------|
+| **Full JS rendering** | Playwright headless Chrome with stealth mode — Yahoo Finance, TradingView, Bloomberg all work |
+| **PDF support** | Auto-detected by URL/content-type, extracted via pdfplumber |
+| **Smart compression** | Sentence-level relevance scoring with bigram matching and position weighting |
+| **TTL cache** | 30-minute in-memory cache — repeated queries return instantly |
+| **Parallel fetch** | Multiple URLs fetched simultaneously via ThreadPoolExecutor |
+| **Spam filtering** | Domain blocklist + unique-word ratio filter removes low-quality results |
+| **Recency detection** | Queries containing "terbaru/latest/hari ini" auto-apply DuckDuckGo time filter |
+| **Retry with backoff** | Failed fetches retry 2x with exponential backoff |
+| **Configurable domains** | Add custom JS-heavy domains via env var or `.mini-browser.json` |
+| **No API keys** | Uses DuckDuckGo — completely free |
 
-| Method | Tokens Used | Cost (GPT-4o) |
-|--------|------------|---------------|
+---
+
+## Token Savings
+
+Fetching a news article:
+
+| Method | Tokens | Cost (GPT-4o) |
+|--------|--------|---------------|
 | Raw HTML | ~14,000 | ~$0.042 |
-| Just text (no compression) | ~3,200 | ~$0.010 |
+| Plain text | ~3,200 | ~$0.010 |
 | **mini-browser** | **~800** | **~$0.002** |
 
 **Savings: ~94%**
 
 ---
 
+## Configuration
+
+### Custom JS-heavy domains
+
+**Via env var:**
+```bash
+MINI_BROWSER_JS_DOMAINS=mysite.com,other.com mini-browser search "query"
+```
+
+**Via config file** (`.mini-browser.json` in current dir or `~/.mini-browser/config.json`):
+```json
+{
+  "js_domains": ["mysite.com", "other.com"]
+}
+```
+
+**In Python:**
+```python
+from mini_browser.config import add_js_domain
+add_js_domain("mysite.com")
+```
+
+### Cache
+
+```python
+from mini_browser import cache
+cache.clear()           # clear all
+print(cache.stats())    # {"total": 5, "alive": 3, "ttl_seconds": 1800}
+```
+
+---
+
 ## How It Works
 
 ```
-User Query
-    │
-    ▼
-┌─────────────┐
-│   Search    │  DuckDuckGo → top N URLs + snippets
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│    Fetch    │  httpx → raw HTML per URL
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   Extract   │  trafilatura → main content only (no nav/ads/footer)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Compress   │  chunk → score by query relevance → top chunks within budget
-└──────┬──────┘
-       │
-       ▼
+Query
+  │
+  ▼
+DuckDuckGo search → top N URLs (spam filtered, recency-aware, dedup domains)
+  │
+  ├─ Parallel fetch (ThreadPoolExecutor)
+  │     │
+  │     ├─ Simple site → httpx → trafilatura → BS4 fallback
+  │     └─ JS-heavy site → Playwright stealth → trafilatura → BS4 fallback
+  │              └─ PDF detected → pdfplumber / pypdf
+  │
+  ▼
+Sentence-level compression (relevance scored, bigram bonus, dedup, token budget)
+  │
+  ▼
+Cache result (TTL 30min)
+  │
+  ▼
 Clean text output (within token budget)
 ```
 
 ---
 
-## API Reference
-
-### `search(query, max_results=3, max_tokens=1000)`
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | str | required | Search query |
-| `max_results` | int | 3 | Number of pages to fetch and process |
-| `max_tokens` | int | 1000 | Maximum tokens in output |
-
-Returns: `str` — clean, relevant text from top search results
-
-### `fetch(url, query="", max_tokens=1000)`
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `url` | str | required | URL to fetch |
-| `query` | str | `""` | Optional topic for relevance filtering |
-| `max_tokens` | int | 1000 | Maximum tokens in output |
-
-Returns: `str` — clean text from the page
-
----
-
-## Integration Examples
-
-### LangChain Tool
-
-```python
-from langchain.tools import Tool
-from mini_browser import search
-
-web_search_tool = Tool(
-    name="web_search",
-    func=lambda q: search(q, max_tokens=800),
-    description="Search the web for current information. Returns clean, token-efficient text.",
-)
-```
-
-### OpenAI Function Calling
-
-```python
-tools = [{
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": "Search the web for current information",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string"},
-                "max_tokens": {"type": "integer", "default": 800}
-            },
-            "required": ["query"]
-        }
-    }
-}]
-
-# In your tool execution:
-if tool_call.function.name == "web_search":
-    args = json.loads(tool_call.function.arguments)
-    result = search(args["query"], max_tokens=args.get("max_tokens", 800))
-```
-
-### Any Text-Only AI (Shell Interface)
-
-Even models that can only process text can use mini-browser via shell:
-
-```
-AI output: Run command: mini-browser search "what is the latest Python version"
-Shell result: Python 3.13.0 was released on October 7, 2024...
-AI processes clean result → answers user
-```
-
----
-
-## Requirements
-
-- Python 3.10+
-- No API keys needed
-- Internet connection
-
-### Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `duckduckgo-search` | Web search without API key |
-| `httpx` | Fast async-capable HTTP client |
-| `trafilatura` | State-of-the-art main content extraction |
-| `tiktoken` | Accurate token counting (OpenAI-compatible) |
-| `mcp` *(optional)* | Model Context Protocol server |
-
----
-
 ## Contributing
-
-Contributions welcome. Please open an issue first to discuss what you'd like to change.
 
 ```bash
 git clone https://github.com/ghanibot/mini-browser
 cd mini-browser
 pip install -e ".[dev]"
+python -m playwright install chromium
 ```
+
+Issues and PRs welcome at [github.com/ghanibot/mini-browser/issues](https://github.com/ghanibot/mini-browser/issues)
 
 ---
 
