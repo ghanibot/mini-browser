@@ -1,7 +1,21 @@
+"""
+Fetch and extract clean text from URLs.
+
+Strategy per request:
+  1. PDF URL/content-type → pdf.extract_pdf()
+  2. JS-heavy domain → Playwright (persistent browser)
+  3. Simple site → httpx + trafilatura → BS4 fallback → Playwright last resort
+  4. Retry up to 2x with backoff on failure
+"""
+
 import re
+import time
+import atexit
 import httpx
 import trafilatura
 
+from mini_browser.config import get_js_domains
+from mini_browser.pdf import extract_pdf, is_pdf_url, is_pdf_response
 
 _HEADERS = {
     "User-Agent": (
@@ -12,24 +26,48 @@ _HEADERS = {
     "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
-# Sites known to require JS rendering
-_JS_HEAVY_DOMAINS = {
-    "tradingview.com", "yahoo.com", "finance.yahoo.com",
-    "twitter.com", "x.com", "instagram.com", "facebook.com",
-    "bloomberg.com", "wsj.com", "ft.com", "investing.com",
-    "nasdaq.com", "marketwatch.com", "cnbc.com",
-    "stockbit.com", "idx.co.id", "investing.co.id",
-}
+# --- Persistent Playwright browser ---
+
+_pw = None
+_browser = None
 
 
-def _needs_js(url: str) -> bool:
+def _get_browser():
+    global _pw, _browser
+    if _browser is None:
+        try:
+            from playwright.sync_api import sync_playwright
+            _pw = sync_playwright().start()
+            _browser = _pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-web-security",
+                ],
+            )
+        except Exception:
+            _browser = None
+    return _browser
+
+
+def _shutdown_browser():
+    global _pw, _browser
     try:
-        from urllib.parse import urlparse
-        domain = urlparse(url).netloc.lower().removeprefix("www.")
-        return any(d in domain for d in _JS_HEAVY_DOMAINS)
+        if _browser:
+            _browser.close()
+        if _pw:
+            _pw.stop()
     except Exception:
-        return False
+        pass
+    _browser = None
+    _pw = None
 
+
+atexit.register(_shutdown_browser)
+
+
+# --- Extraction helpers ---
 
 def _trafilatura_extract(html: str) -> str | None:
     text = trafilatura.extract(
@@ -57,77 +95,114 @@ def _bs_extract(html: str) -> str | None:
         return None
 
 
-def _playwright_fetch(url: str, timeout: int = 20) -> str | None:
+def _playwright_fetch_html(url: str, timeout: int = 20) -> str | None:
+    browser = _get_browser()
+    if browser is None:
+        return None
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-web-security",
-                ],
-            )
-            context = browser.new_context(
-                user_agent=_HEADERS["User-Agent"],
-                locale="id-ID",
-                timezone_id="Asia/Jakarta",
-                viewport={"width": 1280, "height": 800},
-                extra_http_headers={
-                    "Accept-Language": _HEADERS["Accept-Language"],
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                },
-            )
-            # mask webdriver flag
-            context.add_init_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-            )
-            page = context.new_page()
-            try:
-                page.goto(url, timeout=timeout * 1000, wait_until="networkidle")
-            except Exception:
-                # networkidle timeout — still try to get content
-                pass
-            page.wait_for_timeout(2500)
-            html = page.content()
-            browser.close()
-
-        text = _trafilatura_extract(html)
-        return text or _bs_extract(html)
+        context = browser.new_context(
+            user_agent=_HEADERS["User-Agent"],
+            locale="id-ID",
+            timezone_id="Asia/Jakarta",
+            viewport={"width": 1280, "height": 800},
+            extra_http_headers={
+                "Accept-Language": _HEADERS["Accept-Language"],
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
+        )
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
+        page = context.new_page()
+        try:
+            page.goto(url, timeout=timeout * 1000, wait_until="networkidle")
+        except Exception:
+            pass
+        page.wait_for_timeout(2000)
+        html = page.content()
+        context.close()
+        return html
     except Exception:
         return None
 
 
-def fetch_clean(url: str, timeout: int = 12) -> str | None:
-    """
-    Fetch URL and extract main content as clean text.
+def _needs_js(url: str) -> bool:
+    try:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc.lower().removeprefix("www.")
+        return any(d in domain for d in get_js_domains())
+    except Exception:
+        return False
 
-    Strategy:
-    1. If JS-heavy domain → go straight to Playwright
-    2. Otherwise try httpx + trafilatura (fast path)
-    3. If content too short → fallback to BeautifulSoup
-    4. If still empty → fallback to Playwright
+
+# --- Main fetch function ---
+
+def fetch_clean(url: str, timeout: int = 12, retries: int = 2) -> str | None:
+    """
+    Fetch URL and return clean text. Handles HTML, JS-heavy sites, and PDFs.
+    Retries up to `retries` times with exponential backoff.
     """
     if not url or not url.startswith(("http://", "https://")):
         return None
 
-    # Fast path for simple sites
-    if not _needs_js(url):
+    last_error: Exception | None = None
+
+    for attempt in range(retries + 1):
         try:
-            response = httpx.get(url, timeout=timeout, headers=_HEADERS, follow_redirects=True)
-            response.raise_for_status()
-            html = response.text
+            result = _fetch_once(url, timeout)
+            if result:
+                return result
+        except Exception as e:
+            last_error = e
 
-            text = _trafilatura_extract(html)
-            if text:
-                return text
+        if attempt < retries:
+            time.sleep(1.5 ** attempt)
 
-            text = _bs_extract(html)
-            if text:
-                return text
+    return None
+
+
+def _fetch_once(url: str, timeout: int) -> str | None:
+    # PDF: detect by URL pattern first
+    if is_pdf_url(url):
+        try:
+            resp = httpx.get(url, timeout=timeout, headers=_HEADERS, follow_redirects=True)
+            resp.raise_for_status()
+            return extract_pdf(resp.content)
         except Exception:
-            pass
+            return None
 
-    # Playwright fallback — handles JS-heavy and failed fast-path
-    return _playwright_fetch(url, timeout=timeout)
+    # JS-heavy: go straight to Playwright
+    if _needs_js(url):
+        html = _playwright_fetch_html(url, timeout=timeout)
+        if html:
+            return _trafilatura_extract(html) or _bs_extract(html)
+        return None
+
+    # Fast path: httpx
+    try:
+        resp = httpx.get(url, timeout=timeout, headers=_HEADERS, follow_redirects=True)
+        resp.raise_for_status()
+
+        # Check if response is actually a PDF
+        content_type = resp.headers.get("content-type", "")
+        if is_pdf_response(content_type):
+            return extract_pdf(resp.content)
+
+        html = resp.text
+        text = _trafilatura_extract(html)
+        if text:
+            return text
+
+        text = _bs_extract(html)
+        if text:
+            return text
+
+    except Exception:
+        pass
+
+    # Last resort: Playwright
+    html = _playwright_fetch_html(url, timeout=timeout)
+    if html:
+        return _trafilatura_extract(html) or _bs_extract(html)
+
+    return None
