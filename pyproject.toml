@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mini-browser"
-version = "0.4.1"
+version = "0.5.0"
 description = "Token-efficient web search and browsing for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,7 @@ dev = [
 
 [project.scripts]
 mini-browser = "mini_browser.cli:main"
+mini-browser-setup = "scripts.setup_agents:main"
 
 [project.urls]
 Homepage = "https://github.com/ghanibot/mini-browser"

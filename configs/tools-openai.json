@@ -1,0 +1,78 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "web_search",
+      "description": "Search the web for current, real-time information. Returns clean, token-efficient text from top results. Use for: news, prices, facts, recent events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query — be specific for best results"
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Number of web pages to fetch (1–10, default 3)",
+            "default": 3
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Token budget for output (100–4000, default 1500)",
+            "default": 1500
+          }
+        },
+        "required": ["query"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "web_fetch",
+      "description": "Fetch and read a specific URL. Supports JavaScript-heavy sites (Yahoo Finance, TradingView), PDFs, and most websites. Returns clean, token-efficient content.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Full URL to fetch (http/https). Supports JS-heavy sites and PDFs."
+          },
+          "query": {
+            "type": "string",
+            "description": "Optional focus topic — extracts content most relevant to this",
+            "default": ""
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Token budget for output (100–4000, default 1500)",
+            "default": 1500
+          }
+        },
+        "required": ["url"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "deep_research",
+      "description": "Multi-angle deep research on a topic. Generates multiple sub-queries, fetches and synthesizes results from several sources. Use for complex questions that need breadth.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Research topic — will be split into multiple sub-queries for depth"
+          },
+          "max_tokens": {
+            "type": "integer",
+            "description": "Token budget per sub-query (default 1000)",
+            "default": 1000
+          }
+        },
+        "required": ["topic"]
+      }
+    }
+  }
+]

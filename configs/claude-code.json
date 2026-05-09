@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mini-browser": {
+      "command": "mini-browser",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

@@ -53,6 +53,11 @@ Examples:
     serve_p.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     serve_p.add_argument("--port", type=int, default=7842, help="Port (default: 7842)")
 
+    setup_p = subparsers.add_parser("setup-agents", help="Auto-configure for Claude Code, Codex, Gemini, OpenCode, etc.")
+    setup_p.add_argument("--dry-run", action="store_true", help="Preview without writing")
+    setup_p.add_argument("--all", action="store_true", help="Configure all agents even if not installed")
+    setup_p.add_argument("--agent", action="append", dest="agents", metavar="NAME")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -72,6 +77,18 @@ Examples:
     elif args.command == "mcp":
         from mini_browser.mcp_server import run
         run()
+
+    elif args.command == "setup-agents":
+        import sys as _sys
+        _sys.argv = [_sys.argv[0]]
+        if args.dry_run:
+            _sys.argv.append("--dry-run")
+        if args.all:
+            _sys.argv.append("--all")
+        for a in (args.agents or []):
+            _sys.argv += ["--agent", a]
+        from scripts.setup_agents import main as _setup_main
+        _setup_main()
 
     elif args.command == "serve":
         from mini_browser.api import run
