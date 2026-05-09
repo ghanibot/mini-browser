@@ -28,7 +28,7 @@ def run() -> None:
     )
 
     @mcp.tool()
-    def web_search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
+    def web_search(query: str, max_results: int = 3, max_tokens: int = 1500) -> str:
         """
         Search the web for current information.
 
@@ -40,7 +40,7 @@ def run() -> None:
         return search(query, max_results=max_results, max_tokens=max_tokens)
 
     @mcp.tool()
-    def web_fetch(url: str, query: str = "", max_tokens: int = 1000) -> str:
+    def web_fetch(url: str, query: str = "", max_tokens: int = 1500) -> str:
         """
         Fetch and read a specific URL.
 

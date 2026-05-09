@@ -30,7 +30,7 @@ def _clean_text(text: str) -> str:
     return text.strip()
 
 
-def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
+def search(query: str, max_results: int = 3, max_tokens: int = 1500) -> str:
     """
     Search the web and return clean, token-efficient text.
 
@@ -74,7 +74,7 @@ def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
     return "\n\n---\n\n".join(all_content)
 
 
-def fetch(url: str, query: str = "", max_tokens: int = 1000) -> str:
+def fetch(url: str, query: str = "", max_tokens: int = 1500) -> str:
     """
     Fetch a URL and return clean, token-efficient content.
 

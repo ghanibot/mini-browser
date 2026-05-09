@@ -33,8 +33,8 @@ Examples:
     search_p.add_argument("query", help="Search query")
     search_p.add_argument("--max-results", type=int, default=3, metavar="N",
                           help="Number of results to fetch (default: 3)")
-    search_p.add_argument("--max-tokens", type=int, default=1000, metavar="N",
-                          help="Token budget for output (default: 1000)")
+    search_p.add_argument("--max-tokens", type=int, default=1500, metavar="N",
+                          help="Token budget for output (default: 1500)")
     search_p.add_argument("--stats", action="store_true",
                           help="Print token usage stats to stderr")
 
@@ -42,8 +42,8 @@ Examples:
     fetch_p.add_argument("url", help="URL to fetch")
     fetch_p.add_argument("--query", default="", metavar="TEXT",
                          help="Focus extraction on this topic")
-    fetch_p.add_argument("--max-tokens", type=int, default=1000, metavar="N",
-                         help="Token budget for output (default: 1000)")
+    fetch_p.add_argument("--max-tokens", type=int, default=1500, metavar="N",
+                         help="Token budget for output (default: 1500)")
     fetch_p.add_argument("--stats", action="store_true",
                          help="Print token usage stats to stderr")
 
