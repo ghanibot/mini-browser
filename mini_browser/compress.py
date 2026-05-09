@@ -1,4 +1,5 @@
 import re
+from mini_browser.token_counter import count_tokens
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -59,25 +60,20 @@ def compress(text: str, query: str, max_tokens: int = 1000) -> str:
     scored.sort(key=lambda x: x[0], reverse=True)
 
     selected: list[tuple[int, str]] = []
-    total = 0
+    total_tokens = 0
     seen: set[str] = set()
 
     for _, idx, sent in scored:
-        # skip near-duplicates (same first 8 words)
         fingerprint = " ".join(sent.lower().split()[:8])
         if fingerprint in seen:
             continue
         seen.add(fingerprint)
 
-        word_count = len(sent.split())
-        if total + word_count > max_tokens:
-            remaining = max_tokens - total
-            if remaining > 15:
-                partial = " ".join(sent.split()[:remaining])
-                selected.append((idx, partial))
+        sent_tokens = count_tokens(sent)
+        if total_tokens + sent_tokens > max_tokens:
             break
         selected.append((idx, sent))
-        total += word_count
+        total_tokens += sent_tokens
 
     selected.sort(key=lambda x: x[0])
     return " ".join(s for _, s in selected)

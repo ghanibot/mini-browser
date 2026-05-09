@@ -49,8 +49,9 @@ def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
         return "No results found."
 
     all_content: list[str] = []
-    # words ≈ tokens * 0.75 on average; apply ratio so word budget maps to token budget
-    word_budget_per_result = max(120, int(max_tokens * 0.72) // max(len(urls), 1))
+    # Reserve ~80 tokens per result for header (title + source line)
+    header_overhead = 80 * len(urls)
+    token_budget_per_result = max(80, (max_tokens - header_overhead) // max(len(urls), 1))
 
     for result in urls:
         url = result.get("href", "")
@@ -63,7 +64,7 @@ def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
         if not content:
             continue
 
-        compressed = compress(content, query, max_tokens=word_budget_per_result)
+        compressed = compress(content, query, max_tokens=token_budget_per_result)
         if compressed:
             all_content.append(f"## {title}\nSource: {url}\n\n{compressed}")
 
