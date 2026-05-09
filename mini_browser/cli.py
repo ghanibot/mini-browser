@@ -5,6 +5,9 @@ mini-browser CLI — usable by any AI agent that can run shell commands.
 import argparse
 import sys
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf-8-sig"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from mini_browser import search, fetch
 from mini_browser.token_counter import count_tokens
 
