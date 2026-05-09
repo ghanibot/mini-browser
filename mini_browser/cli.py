@@ -49,6 +49,10 @@ Examples:
 
     subparsers.add_parser("mcp", help="Start MCP server (for Claude, Cursor, etc.)")
 
+    serve_p = subparsers.add_parser("serve", help="Start HTTP API server (for bima-agent etc.)")
+    serve_p.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
+    serve_p.add_argument("--port", type=int, default=7842, help="Port (default: 7842)")
+
     args = parser.parse_args()
 
     if args.command == "search":
@@ -68,6 +72,12 @@ Examples:
     elif args.command == "mcp":
         from mini_browser.mcp_server import run
         run()
+
+    elif args.command == "serve":
+        from mini_browser.api import run
+        print(f"mini-browser API → http://{args.host}:{args.port}", file=sys.stderr)
+        print("Docs → http://{args.host}:{args.port}/docs", file=sys.stderr)
+        run(host=args.host, port=args.port)
 
     else:
         parser.print_help()
