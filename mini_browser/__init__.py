@@ -2,13 +2,32 @@
 mini-browser: Token-efficient web search and browsing for AI agents.
 """
 
+import re
 from .search import search_urls
 from .fetch import fetch_clean
 from .compress import compress
 from .token_counter import count_tokens
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = ["search", "fetch", "search_urls", "fetch_clean", "compress", "count_tokens"]
+
+
+def _detect_timelimit(query: str) -> str | None:
+    """Auto-detect recency intent from query keywords."""
+    q = query.lower()
+    if any(k in q for k in ("hari ini", "today", "terbaru", "latest", "terkini", "sekarang", "now", "harga")):
+        return "w"  # last week for fresh data
+    if any(k in q for k in ("bulan ini", "this month", "minggu ini", "this week")):
+        return "m"
+    if any(k in q for k in ("tahun ini", "this year")):
+        return "y"
+    return None
+
+
+def _clean_text(text: str) -> str:
+    text = re.sub(r"http\S+", "", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
 
 
 def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
@@ -23,13 +42,15 @@ def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
     Returns:
         Clean, relevant text from top search results
     """
-    urls = search_urls(query, max_results=max_results)
+    timelimit = _detect_timelimit(query)
+    urls = search_urls(query, max_results=max_results, timelimit=timelimit)
 
     if not urls:
         return "No results found."
 
-    all_content = []
-    budget_per_result = max_tokens // max(len(urls), 1)
+    all_content: list[str] = []
+    # words ≈ tokens * 0.75 on average; apply ratio so word budget maps to token budget
+    word_budget_per_result = max(120, int(max_tokens * 0.72) // max(len(urls), 1))
 
     for result in urls:
         url = result.get("href", "")
@@ -37,12 +58,12 @@ def search(query: str, max_results: int = 3, max_tokens: int = 1000) -> str:
         snippet = result.get("body", "")
 
         full_text = fetch_clean(url)
-        content = full_text or snippet
+        content = _clean_text(full_text) if full_text else _clean_text(snippet)
 
         if not content:
             continue
 
-        compressed = compress(content, query, max_tokens=budget_per_result)
+        compressed = compress(content, query, max_tokens=word_budget_per_result)
         if compressed:
             all_content.append(f"## {title}\nSource: {url}\n\n{compressed}")
 
@@ -67,6 +88,8 @@ def fetch(url: str, query: str = "", max_tokens: int = 1000) -> str:
     content = fetch_clean(url)
     if not content:
         return "Failed to fetch or extract content from URL."
+
+    content = _clean_text(content)
 
     if query:
         return compress(content, query, max_tokens=max_tokens)

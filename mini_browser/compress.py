@@ -1,52 +1,83 @@
 import re
 
 
-def compress(text: str, query: str, max_tokens: int = 1000, chunk_size: int = 150) -> str:
-    """
-    Compress text to max_tokens by keeping chunks most relevant to query.
+def _split_sentences(text: str) -> list[str]:
+    parts = re.split(r"(?<=[.!?])\s+|\n{2,}", text)
+    return [s.strip() for s in parts if len(s.strip()) > 25]
 
-    Uses keyword overlap scoring — no external dependencies, works for any AI.
+
+def _score(sentence: str, query_words: set[str]) -> float:
+    words = set(re.sub(r"[^\w\s]", "", sentence).lower().split())
+    if not words:
+        return 0.0
+    overlap = len(query_words & words)
+    # bigram bonus
+    tokens = sentence.lower().split()
+    bigrams = {f"{tokens[i]} {tokens[i+1]}" for i in range(len(tokens) - 1)}
+    query_bigrams = set()
+    qlist = list(query_words)
+    for i in range(len(qlist) - 1):
+        query_bigrams.add(f"{qlist[i]} {qlist[i+1]}")
+    bigram_bonus = len(query_bigrams & bigrams) * 0.5
+    return (overlap + bigram_bonus) / (1 + len(words) ** 0.25)
+
+
+def _clean_artifacts(text: str) -> str:
+    text = re.sub(r"[^\x00-\x7FÀ-ɏЀ-ӿĀ-ſ一-鿿　-〿가-힯؀-ۿऀ-ॿঀ-৿]", "", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def compress(text: str, query: str, max_tokens: int = 1000) -> str:
+    """
+    Compress text to max_tokens using sentence-level relevance scoring.
+    Keeps sentences most relevant to query, preserving original order.
     """
     if not text:
         return ""
 
-    text = re.sub(r"\n{3,}", "\n\n", text.strip())
-    text = re.sub(r"[ \t]{2,}", " ", text)
-
+    text = _clean_artifacts(text)
     words = text.split()
 
     if len(words) <= max_tokens:
         return text
 
-    chunks: list[str] = []
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i : i + chunk_size])
-        chunks.append(chunk)
+    sentences = _split_sentences(text)
+    if not sentences:
+        return " ".join(words[:max_tokens])
 
     query_words = set(re.sub(r"[^\w\s]", "", query).lower().split())
 
-    scored: list[tuple[int, int, str]] = []
-    for idx, chunk in enumerate(chunks):
-        chunk_words = set(re.sub(r"[^\w\s]", "", chunk).lower().split())
-        score = len(query_words & chunk_words)
-        scored.append((score, idx, chunk))
+    scored: list[tuple[float, int, str]] = []
+    for idx, sent in enumerate(sentences):
+        base_score = _score(sent, query_words)
+        # sentences near top of article get slight bonus (news puts key facts first)
+        position_bonus = 1.0 / (1.0 + idx * 0.04)
+        scored.append((base_score * (1 + position_bonus), idx, sent))
 
-    scored.sort(key=lambda x: (x[0], -x[1]), reverse=True)
+    scored.sort(key=lambda x: x[0], reverse=True)
 
-    result_chunks: list[tuple[int, str]] = []
-    total_words = 0
+    selected: list[tuple[int, str]] = []
+    total = 0
+    seen: set[str] = set()
 
-    for score, idx, chunk in scored:
-        chunk_word_count = len(chunk.split())
-        if total_words + chunk_word_count > max_tokens:
-            remaining = max_tokens - total_words
-            if remaining > 20:
-                partial = " ".join(chunk.split()[:remaining])
-                result_chunks.append((idx, partial))
-                total_words += remaining
+    for _, idx, sent in scored:
+        # skip near-duplicates (same first 8 words)
+        fingerprint = " ".join(sent.lower().split()[:8])
+        if fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+
+        word_count = len(sent.split())
+        if total + word_count > max_tokens:
+            remaining = max_tokens - total
+            if remaining > 15:
+                partial = " ".join(sent.split()[:remaining])
+                selected.append((idx, partial))
             break
-        result_chunks.append((idx, chunk))
-        total_words += chunk_word_count
+        selected.append((idx, sent))
+        total += word_count
 
-    result_chunks.sort(key=lambda x: x[0])
-    return "\n\n".join(chunk for _, chunk in result_chunks)
+    selected.sort(key=lambda x: x[0])
+    return " ".join(s for _, s in selected)
