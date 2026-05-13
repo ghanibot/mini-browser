@@ -1,3 +1,4 @@
+import logging
 import re
 from urllib.parse import urlparse
 
@@ -7,6 +8,8 @@ except ImportError:
     from duckduckgo_search import DDGS
 
 from mini_browser.config import get_search_provider
+
+_log = logging.getLogger(__name__)
 
 # Domains known for spam, clickbait, or low-quality content
 _BLOCKLIST_PATTERNS = [
@@ -80,7 +83,13 @@ def _search_tavily(
     """Search via Tavily and normalise results to {href, title, body}."""
     try:
         from tavily import TavilyClient
+    except ImportError:
+        raise ImportError(
+            "tavily-python is required for the Tavily search provider. "
+            "Install it with: pip install mini-browser[tavily]"
+        )
 
+    try:
         client = TavilyClient()
         kwargs: dict = {"max_results": max_results}
         if timelimit:
@@ -97,6 +106,7 @@ def _search_tavily(
             for r in response.get("results", [])
         ]
     except Exception:
+        _log.warning("Tavily search failed for query %r", query, exc_info=True)
         return []
 
 
