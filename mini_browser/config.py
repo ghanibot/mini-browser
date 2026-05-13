@@ -83,3 +83,8 @@ def add_js_domain(domain: str) -> None:
     domains = get_js_domains()
     domains.add(domain.removeprefix("www."))
     _cached_domains = domains
+
+
+def get_search_provider() -> str:
+    """Return the configured search provider ('duckduckgo' or 'tavily')."""
+    return os.environ.get("MINI_BROWSER_SEARCH_PROVIDER", "duckduckgo").lower()
