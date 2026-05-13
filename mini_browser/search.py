@@ -1,3 +1,4 @@
+import logging
 import re
 from urllib.parse import urlparse
 
@@ -5,6 +6,10 @@ try:
     from ddgs import DDGS
 except ImportError:
     from duckduckgo_search import DDGS
+
+from mini_browser.config import get_search_provider
+
+_log = logging.getLogger(__name__)
 
 # Domains known for spam, clickbait, or low-quality content
 _BLOCKLIST_PATTERNS = [
@@ -31,10 +36,25 @@ def search_urls(
     timelimit: str | None = None,
 ) -> list[dict]:
     """
-    Search DuckDuckGo. Returns list of dicts: href, title, body.
+    Search the web. Returns list of dicts: href, title, body.
+
+    Provider is selected via MINI_BROWSER_SEARCH_PROVIDER env var
+    ('duckduckgo' default, or 'tavily').
 
     timelimit: "d" (day), "w" (week), "m" (month), "y" (year)
     """
+    provider = get_search_provider()
+    if provider == "tavily":
+        return _search_tavily(query, max_results, timelimit)
+    return _search_ddgs(query, max_results, timelimit)
+
+
+def _search_ddgs(
+    query: str,
+    max_results: int = 5,
+    timelimit: str | None = None,
+) -> list[dict]:
+    """Search via DuckDuckGo."""
     try:
         kwargs: dict = {"max_results": max_results * 3}
         if timelimit:
@@ -44,6 +64,49 @@ def search_urls(
         results = _filter_and_dedup(results, max_results)
         return results
     except Exception:
+        return []
+
+
+_TIMELIMIT_TO_TIME_RANGE = {
+    "d": "day",
+    "w": "week",
+    "m": "month",
+    "y": "year",
+}
+
+
+def _search_tavily(
+    query: str,
+    max_results: int = 5,
+    timelimit: str | None = None,
+) -> list[dict]:
+    """Search via Tavily and normalise results to {href, title, body}."""
+    try:
+        from tavily import TavilyClient
+    except ImportError:
+        raise ImportError(
+            "tavily-python is required for the Tavily search provider. "
+            "Install it with: pip install mini-browser[tavily]"
+        )
+
+    try:
+        client = TavilyClient()
+        kwargs: dict = {"max_results": max_results}
+        if timelimit:
+            time_range = _TIMELIMIT_TO_TIME_RANGE.get(timelimit)
+            if time_range:
+                kwargs["time_range"] = time_range
+        response = client.search(query, **kwargs)
+        return [
+            {
+                "href": r.get("url", ""),
+                "title": r.get("title", ""),
+                "body": r.get("content", ""),
+            }
+            for r in response.get("results", [])
+        ]
+    except Exception:
+        _log.warning("Tavily search failed for query %r", query, exc_info=True)
         return []
 
 

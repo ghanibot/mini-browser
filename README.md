@@ -36,7 +36,7 @@ With mini-browser:      clean text →   800 tokens  →  $
 
 **mini-browser** sits between your AI agent and the web:
 
-1. **Searches** — DuckDuckGo, no API key required, spam filtered, recency-aware
+1. **Searches** — DuckDuckGo (default, no API key) or Tavily (optional, higher quality), spam filtered, recency-aware
 2. **Fetches** — full Playwright browser for JS-heavy sites (Yahoo Finance, TradingView, Bloomberg), fast httpx for simple sites
 3. **Extracts** — trafilatura + BeautifulSoup strip all noise (nav/ads/footer)
 4. **Compresses** — sentence-level relevance scoring keeps only what matters for your query
@@ -94,6 +94,11 @@ python -m playwright install chromium
 pip install "mini-browser[mcp] @ git+https://github.com/ghanibot/mini-browser.git"
 ```
 
+### With Tavily search
+```bash
+pip install "mini-browser[tavily] @ git+https://github.com/ghanibot/mini-browser.git"
+```
+
 ### With PDF support
 ```bash
 pip install "mini-browser[pdf] @ git+https://github.com/ghanibot/mini-browser.git"
@@ -105,7 +110,7 @@ pip install "mini-browser[full] @ git+https://github.com/ghanibot/mini-browser.g
 python -m playwright install chromium
 ```
 
-**Requirements:** Python 3.10+, internet connection, no API keys needed.
+**Requirements:** Python 3.10+, internet connection. No API keys needed for default DuckDuckGo search; Tavily requires a `TAVILY_API_KEY` (see [Configuration](#search-provider) below).
 
 ---
 
@@ -238,7 +243,7 @@ result = handle_tool_call(tool_name, tool_arguments)
 | **Recency detection** | Queries containing "terbaru/latest/hari ini" auto-apply DuckDuckGo time filter |
 | **Retry with backoff** | Failed fetches retry 2x with exponential backoff |
 | **Configurable domains** | Add custom JS-heavy domains via env var or `.mini-browser.json` |
-| **No API keys** | Uses DuckDuckGo — completely free |
+| **No API keys** | Uses DuckDuckGo by default — completely free. Optional Tavily provider for higher quality |
 
 ---
 
@@ -257,6 +262,28 @@ Fetching a news article:
 ---
 
 ## Configuration
+
+### Search Provider
+
+By default, mini-browser uses DuckDuckGo (no API key required). You can switch to [Tavily](https://tavily.com) for higher-quality, AI-optimized search results.
+
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `MINI_BROWSER_SEARCH_PROVIDER` | Search backend to use: `duckduckgo` or `tavily` | `duckduckgo` |
+| `TAVILY_API_KEY` | Your Tavily API key (required when provider is `tavily`) | — |
+
+```bash
+# Install with Tavily support
+pip install "mini-browser[tavily] @ git+https://github.com/ghanibot/mini-browser.git"
+
+# Use Tavily as search provider
+export MINI_BROWSER_SEARCH_PROVIDER=tavily
+export TAVILY_API_KEY=tvly-YOUR_API_KEY
+
+mini-browser search "latest AI news today"
+```
+
+Get a free Tavily API key (1,000 credits/month) at [app.tavily.com](https://app.tavily.com).
 
 ### Custom JS-heavy domains
 
